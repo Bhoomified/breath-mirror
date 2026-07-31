@@ -1,0 +1,19 @@
+# Node
+node_modules/
+frontend/dist/
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ML artifacts (large/binary — track separately or via Git LFS)
+ml-training/data/raw/
+ml-training/data/processed/
+backend/app/models/*.pkl
+backend/app/models/*.onnx
+
+# OS
+.DS_Store
