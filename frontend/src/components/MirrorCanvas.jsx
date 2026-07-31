@@ -46,7 +46,10 @@ export default function MirrorCanvas({ onStatusChange, onPhotoCaptured, breathRi
   }, []);
 
   useEffect(() => {
+    // --- effect-scoped state, all declared up front ---
     let mpCamera, hands, rafId;
+    let cancelled = false;
+    let currentStream = null;
     const video = videoRef.current;
 
     function render() {
@@ -185,19 +188,36 @@ export default function MirrorCanvas({ onStatusChange, onPhotoCaptured, breathRi
     }
 
     async function init() {
-      const { Camera } = await import('@mediapipe/camera_utils');
-      const { Hands } = await import('@mediapipe/hands');
+      if (cancelled) return;
+
+      // Hands/Camera come from the CDN <script> tags in index.html, NOT npm imports —
+      // MediaPipe's npm packages don't ship valid ES modules for bundlers like Vite.
+      const Hands = window.Hands;
+      const Camera = window.Camera;
+
+      if (!Hands || !Camera) {
+        console.error('MediaPipe scripts not loaded yet (check index.html <script> tags)');
+        onStatusChange('failed to load hand tracking — refresh the page');
+        return;
+      }
 
       hands = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
       hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
       hands.onResults(onHandsResults);
 
       try {
+        console.log('Requesting camera permission...');
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }, audio: false
         });
+        console.log('Camera stream acquired:', stream);
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+
+        currentStream = stream;
         video.srcObject = stream;
         await video.play();
+        console.log('Video playing, dimensions:', video.videoWidth, video.videoHeight);
+
         mpCamera = new Camera(video, {
           onFrame: async () => { await hands.send({ image: video }); },
           width: 1280, height: 720
@@ -206,12 +226,19 @@ export default function MirrorCanvas({ onStatusChange, onPhotoCaptured, breathRi
         onStatusChange('blow on the screen');
         render();
       } catch (e) {
-        onStatusChange('camera access needed');
+        console.error('Camera init failed:', e.name, e.message);
+        onStatusChange(`camera error: ${e.name}`);
       }
     }
 
     init();
-    return () => { if (rafId) cancelAnimationFrame(rafId); mpCamera?.stop?.(); };
+
+    return () => {
+      cancelled = true;
+      if (rafId) cancelAnimationFrame(rafId);
+      mpCamera?.stop?.();
+      currentStream?.getTracks().forEach(t => t.stop());
+    };
   }, []);
 
   const undo = () => fogRef.current?.undo();
