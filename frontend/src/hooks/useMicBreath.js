@@ -1,12 +1,13 @@
 // frontend/src/hooks/useMicBreath.js
 import { useEffect, useRef } from 'react';
 
-export function useMicBreath(onBreath, threshold = 0.014) {
+export function useMicBreath(onBreath, threshold = 0.02) {
   const savedCallback = useRef(onBreath);
   savedCallback.current = onBreath;
 
   useEffect(() => {
     let audioCtx, rafId, stopped = false;
+    let breathCooldown = 0; // throttle: only actually trigger fog every N frames
 
     async function start() {
       try {
@@ -28,7 +29,12 @@ export function useMicBreath(onBreath, threshold = 0.014) {
           let s = 0;
           for (const v of buf) s += v * v;
           const rms = Math.sqrt(s / buf.length);
-          if (rms > threshold) savedCallback.current(rms);
+
+          if (breathCooldown > 0) breathCooldown--;
+          if (rms > threshold && breathCooldown === 0) {
+            savedCallback.current(rms);
+            breathCooldown = 4; // matches original v1 throttle
+          }
         };
         tick();
       } catch (e) {
