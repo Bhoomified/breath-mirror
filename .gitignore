@@ -17,3 +17,7 @@ backend/app/models/*.onnx
 
 # OS
 .DS_Store
+
+# System
+.DS_Store
+__MACOSX/
